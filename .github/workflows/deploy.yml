@@ -1,0 +1,144 @@
+name: Deploy to Docker Swarm
+
+on:
+  push:
+    branches:
+      - main      # Production deployment
+      - develop   # Development deployment
+    tags:
+      - 'v*'      # Version deployments
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'prod'
+        type: choice
+        options:
+          - dev
+          - prod
+
+jobs:
+  deploy-production:
+    name: Deploy to Production
+    runs-on: self-hosted
+    env:
+      STACK_NAME: eorder-nextjs
+      SERVICE_NAME: eorder-nextjs_eorder-nextjs
+      IMAGE_NAME: eorder-nextjs
+      DOCKER_REGISTRY: ${DOCKER_REGISTRY:-local}
+    if: |
+      (github.ref == 'refs/heads/main') ||
+      (startsWith(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'prod')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extract version
+        id: meta
+        run: |
+          VERSION=${GITHUB_SHA::8}
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Image version: $VERSION"
+
+      - name: Clean up old Docker artifacts
+        run: |
+          docker image prune -f || true
+          docker builder prune -af || true
+
+      - name: Build Docker image
+        run: |
+          echo "Building image $IMAGE_NAME:${{ steps.meta.outputs.version }}"
+          docker build -f Dockerfile \
+            -t $IMAGE_NAME:${{ steps.meta.outputs.version }} \
+            -t $IMAGE_NAME:prod \
+            .
+          docker image inspect $IMAGE_NAME:${{ steps.meta.outputs.version }} >/dev/null 2>&1
+          docker image inspect $IMAGE_NAME:prod >/dev/null 2>&1
+
+      - name: Ensure stack is present (idempotent)
+        run: |
+          # Deploy stack file if not already present; safe to re-run
+          docker stack deploy -c docker-compose.swarm.yml $STACK_NAME
+
+      - name: Force service update to new image (rolling)
+        run: |
+          echo "Updating $SERVICE_NAME to image $IMAGE_NAME:prod"
+          docker service update --force --with-registry-auth --image $IMAGE_NAME:prod $SERVICE_NAME
+          echo "Waiting for service to converge..."
+          for i in {1..20}; do
+            REPLICAS=$(docker service ls --filter name=$SERVICE_NAME --format "{{.Replicas}}")
+            echo "Attempt $i: $REPLICAS"
+            if [[ "$REPLICAS" == */* ]]; then
+              CUR=$(echo $REPLICAS | cut -d/ -f1); DES=$(echo $REPLICAS | cut -d/ -f2)
+              if [[ "$CUR" == "$DES" && "$DES" != "0" ]]; then
+                echo "Service converged"
+                break
+              fi
+            fi
+            sleep 6
+          done
+          docker service ps $SERVICE_NAME --no-trunc | head -5
+
+  deploy-development:
+    name: Deploy to Development
+    runs-on: self-hosted
+    env:
+      STACK_NAME: eorder-nextjs
+      SERVICE_NAME: eorder-nextjs_eorder-nextjs
+      IMAGE_NAME: eorder-nextjs
+      DOCKER_REGISTRY: ${DOCKER_REGISTRY:-local}
+    if: |
+      (github.ref == 'refs/heads/develop') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'dev')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Compute version
+        id: meta
+        run: |
+          echo "version=dev-${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+
+      - name: Clean up old Docker artifacts
+        run: |
+          docker image prune -f || true
+          docker builder prune -af || true
+
+      - name: Build Docker image (dev tag)
+        run: |
+          echo "Building image $IMAGE_NAME:dev"
+          docker build -f Dockerfile \
+            -t $IMAGE_NAME:${{ steps.meta.outputs.version }} \
+            -t $IMAGE_NAME:dev \
+            .
+          docker image inspect $IMAGE_NAME:${{ steps.meta.outputs.version }} >/dev/null 2>&1
+          docker image inspect $IMAGE_NAME:dev >/dev/null 2>&1
+
+      - name: Ensure stack is present (idempotent)
+        run: |
+          # Deploy stack file if not already present; safe to re-run
+          docker stack deploy -c docker-compose.swarm.yml $STACK_NAME
+
+      - name: Force service update to new image (dev)
+        run: |
+          echo "Updating $SERVICE_NAME to image $IMAGE_NAME:dev"
+          docker service update --force --with-registry-auth --image $IMAGE_NAME:dev $SERVICE_NAME
+          echo "Waiting for service to converge..."
+          for i in {1..20}; do
+            REPLICAS=$(docker service ls --filter name=$SERVICE_NAME --format "{{.Replicas}}")
+            echo "Attempt $i: $REPLICAS"
+            if [[ "$REPLICAS" == */* ]]; then
+              CUR=$(echo $REPLICAS | cut -d/ -f1); DES=$(echo $REPLICAS | cut -d/ -f2)
+              if [[ "$CUR" == "$DES" && "$DES" != "0" ]]; then
+                echo "Service converged"
+                break
+              fi
+            fi
+            sleep 6
+          done
+          docker service ps $SERVICE_NAME --no-trunc | head -5

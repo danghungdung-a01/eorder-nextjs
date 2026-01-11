@@ -1,0 +1,57 @@
+# Alternative Dockerfile without standalone mode
+# Use this if the main Dockerfile fails
+
+# Stage 1: Build
+FROM node:20-alpine AS builder
+WORKDIR /app
+
+# Install dependencies
+RUN apk add --no-cache ca-certificates && \
+    npm config set registry https://registry.npmjs.org/
+
+# Copy package files
+COPY package.json package-lock.json* ./
+
+# Install dependencies
+RUN if [ -f package-lock.json ]; then \
+      npm ci --prefer-offline --no-audit; \
+    else \
+      npm install --no-audit; \
+    fi
+
+# Copy source code
+COPY . .
+
+# Build Next.js app
+RUN npm run build
+
+# Stage 2: Production
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PORT=3000
+
+# Install runtime dependencies
+RUN apk add --no-cache ca-certificates wget && \
+    npm config set registry https://registry.npmjs.org/ && \
+    addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
+# Copy files from builder
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next ./.next
+
+# Set ownership
+RUN chown -R nextjs:nodejs /app
+
+USER nextjs
+
+EXPOSE 3000
+
+ENV HOSTNAME="0.0.0.0"
+ENV PORT=3000
+
+CMD ["npm", "start"]
+

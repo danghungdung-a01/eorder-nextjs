@@ -1,0 +1,42 @@
+{
+  "name": "elegencia-next",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.90.3",
+    "@types/react-router-dom": "^5.3.3",
+    "classnames": "^2.5.1",
+    "graphql": "^16.11.0",
+    "graphql-yoga": "^5.16.0",
+    "gsap": "^3.13.0",
+    "lightgallery": "^2.9.0",
+    "lodash": "^4.17.21",
+    "next": "15.5.4",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-responsive-modal": "^7.1.0",
+    "react-router-dom": "^7.9.4",
+    "react-select": "^5.10.2",
+    "react-youtube": "^10.1.0",
+    "split-type": "^0.3.4",
+    "swiper": "^12.0.2"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "@types/lodash": "^4.17.20",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "15.5.4",
+    "tailwindcss": "^4",
+    "typescript": "5.9.3"
+  }
+}

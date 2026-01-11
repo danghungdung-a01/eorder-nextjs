@@ -1,0 +1,65 @@
+version: '3.8'
+
+# ===========================================
+# EORDER NEXTJS - DOCKER SWARM CONFIGURATION
+# ===========================================
+# Next.js EOrder Frontend with multiple replicas
+# Using Docker Swarm for scaling and management
+
+services:
+  # EOrder Next.js Service - Multiple replicas
+  eorder-nextjs:
+    image: eorder-nextjs:eorder-dev-1.0
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+      placement:
+        constraints:
+          - node.role == manager
+    environment:
+      # Next.js Configuration
+      - NODE_ENV=production
+      - PORT=3000
+      
+      # API Configuration (if needed)
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost}
+      
+      # Optional: Add any other environment variables here
+      # - DATABASE_URL=...
+      # - REDIS_URL=...
+    # No published ports; accessed via overlay network (NPM proxy)
+    networks:
+      - proxy_net
+      - backend_net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+networks:
+  proxy_net:
+    external: true
+    name: core_proxy_net
+  backend_net:
+    external: true
+    name: core_backend_net
+
