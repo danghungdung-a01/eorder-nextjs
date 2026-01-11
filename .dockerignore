@@ -1,8 +1,12 @@
+Dockerfile
+.dockerignore
 node_modules
-.next/cache
+npm-debug.log
+README.md
+.next
 .git
 .DS_Store
-.env
-Dockerfile
-docker-compose.yml
-README.md
+.env*
+!.env.example
+public
+!public
