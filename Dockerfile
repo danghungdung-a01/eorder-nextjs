@@ -22,6 +22,7 @@ WORKDIR /app
 ENV NODE_ENV production
 ENV NEXT_TELEMETRY_DISABLED 1
 ENV PORT 3000
+ENV HOSTNAME "0.0.0.0"
 
 # Install CA certificates (required for secure external requests)
 RUN apk add --no-cache ca-certificates
